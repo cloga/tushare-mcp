@@ -1,0 +1,5 @@
+mcp
+tushare
+pandas
+python-dotenv
+
