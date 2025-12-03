@@ -1,0 +1,40 @@
+{
+  "start_date": "2023-06-13",
+  "end_date": "2025-12-03",
+  "initial_capital": 100000.0,
+  "ending_value": 130534.39,
+  "total_return": 30.53,
+  "annualized_return": 11.36,
+  "num_days": 904,
+  "num_rebalances": 31,
+  "portfolio_metrics": {
+    "total_return": 30.53,
+    "annualized_return": 11.84,
+    "annualized_vol": 6.41,
+    "sharpe": 1.47,
+    "max_drawdown": -4.64
+  },
+  "benchmark_metrics": {
+    "沪深300": {
+      "total_return": 17.24,
+      "annualized_return": 6.91,
+      "annualized_vol": 17.81,
+      "sharpe": 0.35,
+      "max_drawdown": -21.42
+    },
+    "中证500": {
+      "total_return": 15.76,
+      "annualized_return": 6.34,
+      "annualized_vol": 23.23,
+      "sharpe": 0.29,
+      "max_drawdown": -27.6
+    },
+    "创业板指": {
+      "total_return": 40.14,
+      "annualized_return": 15.23,
+      "annualized_vol": 32.32,
+      "sharpe": 0.54,
+      "max_drawdown": -32.62
+    }
+  }
+}

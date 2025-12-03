@@ -2,4 +2,6 @@ mcp
 tushare
 pandas
 python-dotenv
+flask
+openai
 

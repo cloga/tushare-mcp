@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 import tushare as ts
 import pandas as pd
 import datetime
+import math
+import json
 from mcp.server.fastmcp import FastMCP
+from wheel_backtest import run_wheel_backtest, WheelBacktestError
 
 # Load environment variables from .env file in the same directory
 env_path = Path(__file__).parent / '.env'
@@ -131,6 +134,123 @@ def get_daily_basic(ts_code: str = "", trade_date: str = "", start_date: str = "
         return df.to_json(orient="records", force_ascii=False)
     except Exception as e:
         return f"Error fetching daily basic data: {str(e)}"
+
+@mcp.tool()
+def get_price_volatility(
+    identifier: str,
+    window: int = 30,
+    frequency: str = "daily",
+    annualize: bool = True
+) -> str:
+    """
+    Compute price volatility for a given stock by code or company name.
+
+    Args:
+        identifier: Stock code (e.g., '000001.SZ') or exact/partial company name.
+        window: Number of most recent periods (days/months/years) to include (default 30).
+        frequency: One of 'daily', 'monthly', or 'yearly'.
+        annualize: Whether to return annualized volatility (uses 252/12/1 scaling).
+    """
+    if not pro:
+        return "Error: Tushare token not configured."
+
+    identifier = (identifier or "").strip()
+    if not identifier:
+        return "Error: identifier is required."
+
+    frequency = (frequency or "daily").lower()
+    if frequency not in {"daily", "monthly", "yearly"}:
+        return "Error: frequency must be one of 'daily', 'monthly', or 'yearly'."
+
+    try:
+        ts_code = None
+        company_name = None
+
+        if "." in identifier:
+            ts_code = identifier.upper()
+            df_lookup = pro.stock_basic(ts_code=ts_code, fields='ts_code,name')
+            if df_lookup.empty:
+                return f"Error: No stock found for code {ts_code}."
+            company_name = df_lookup.iloc[0]['name']
+        else:
+            df_lookup = pro.stock_basic(exchange='', list_status='L', fields='ts_code,name')
+            matches = df_lookup[df_lookup['name'].str.contains(identifier, case=False, na=False)]
+            if matches.empty:
+                return f"Error: No stock matched name '{identifier}'."
+            if len(matches) > 1:
+                return "Error: Multiple stocks matched the name. Please provide the exact ts_code."
+            ts_code = matches.iloc[0]['ts_code']
+            company_name = matches.iloc[0]['name']
+
+        today = datetime.datetime.now()
+        if frequency == "daily":
+            lookback_days = max(window * 3, 90)
+        elif frequency == "monthly":
+            lookback_days = max(window * 40, 365)
+        else:  # yearly
+            lookback_days = max(window * 370, 5 * 365)
+
+        start_date = (today - datetime.timedelta(days=lookback_days)).strftime('%Y%m%d')
+        end_date = today.strftime('%Y%m%d')
+
+        if frequency == "daily":
+            df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+        else:
+            df = pro.monthly(ts_code=ts_code, start_date=start_date, end_date=end_date)
+
+        if df.empty:
+            return f"Error: No price data found for {ts_code} using frequency '{frequency}'."
+
+        df = df.sort_values('trade_date').reset_index(drop=True)
+
+        if frequency == "yearly":
+            df['year'] = df['trade_date'].str[:4]
+            df = (
+                df.groupby('year', as_index=False)
+                .tail(1)
+                .sort_values('trade_date')
+                .reset_index(drop=True)
+            )
+            df = df.drop(columns=['year'])
+
+        price_series = df['close']
+        returns = price_series.pct_change().dropna()
+        if returns.empty:
+            return "Error: Not enough price history to compute returns."
+
+        returns_window = returns.tail(window)
+        if returns_window.empty:
+            returns_window = returns
+
+        period_vol = returns_window.std()
+        if pd.isna(period_vol):
+            return "Error: Unable to compute volatility from the data available."
+
+        scaling = {
+            "daily": math.sqrt(252),
+            "monthly": math.sqrt(12),
+            "yearly": 1.0
+        }
+        annualized_vol = period_vol * scaling[frequency] if annualize else None
+
+        window_dates = df.loc[returns_window.index, 'trade_date']
+
+        result = {
+            "ts_code": ts_code,
+            "name": company_name,
+            "frequency": frequency,
+            "window_periods": int(len(returns_window)),
+            "period_volatility": float(period_vol),
+            "annualized_volatility": float(annualized_vol) if annualized_vol is not None else None,
+            "mean_period_return": float(returns_window.mean()),
+            "data_start": window_dates.iloc[0] if not window_dates.empty else df.iloc[0]['trade_date'],
+            "data_end": window_dates.iloc[-1] if not window_dates.empty else df.iloc[-1]['trade_date']
+        }
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        return f"Error computing volatility: {str(e)}"
 
 @mcp.tool()
 def get_weekly_price(ts_code: str, start_date: str, end_date: str) -> str:
@@ -516,6 +636,113 @@ def get_index_dailybasic(trade_date: str = "", ts_code: str = "", start_date: st
         return df.to_json(orient="records", force_ascii=False)
     except Exception as e:
         return f"Error fetching index daily basic info: {str(e)}"
+
+@mcp.tool()
+def get_fund_daily(ts_code: str, start_date: str = "", end_date: str = "", fields: str = "") -> str:
+    """
+    Get ETF/fund OHLC data using Tushare fund_daily endpoint (doc 127).
+
+    Args:
+        ts_code: Fund/ETF code (e.g., '159915.SZ').
+        start_date: Start date YYYYMMDD.
+        end_date: End date YYYYMMDD.
+        fields: Optional comma-separated field list to limit returned columns.
+    """
+    if not pro:
+        return "Error: Tushare token not configured."
+    if not ts_code:
+        return "Error: ts_code is required."
+    try:
+        kwargs = {"ts_code": ts_code, "start_date": start_date, "end_date": end_date}
+        if fields:
+            kwargs["fields"] = fields
+        df = pro.fund_daily(**kwargs)
+        if df.empty:
+            return f"No fund_daily data returned for {ts_code}."
+        return df.to_json(orient="records", force_ascii=False)
+    except Exception as e:
+        return f"Error fetching fund daily data: {str(e)}"
+
+@mcp.tool()
+def backtest_wheel_strategy(
+    underlying: str,
+    start_date: str = "20220101",
+    end_date: str = datetime.datetime.now().strftime("%Y%m%d"),
+    otm_min: float = 0.07,
+    otm_max: float = 0.10,
+    initial_capital: float = 30000.0
+) -> str:
+    """
+    Run a simple monthly wheel strategy on an ETF using its exchange-traded options.
+
+    Args:
+        underlying: ETF/fund ts_code (e.g., '159915.SZ').
+        start_date: Backtest start date (YYYYMMDD).
+        end_date: Backtest end date (YYYYMMDD).
+        otm_min: Lower bound for OTM percentage (e.g., 0.07 for 7%).
+        otm_max: Upper bound for OTM percentage (e.g., 0.10 for 10%).
+        initial_capital: Starting cash used for tracking return metrics.
+    """
+    if not pro:
+        return "Error: Tushare token not configured."
+    if not underlying:
+        return "Error: underlying ts_code is required."
+    if otm_min < 0 or otm_max <= otm_min:
+        return "Error: Invalid OTM range. Ensure 0 <= otm_min < otm_max."
+
+    try:
+        result = run_wheel_backtest(
+            pro,
+            underlying=underlying,
+            start_date=start_date,
+            end_date=end_date,
+            otm_min=otm_min,
+            otm_max=otm_max,
+            initial_capital=initial_capital,
+        )
+        result["recent_trades"] = result.get("trades", [])[-12:]
+        return json.dumps(result, ensure_ascii=False)
+    except WheelBacktestError as exc:
+        return f"Error running wheel strategy: {str(exc)}"
+    except Exception as exc:  # noqa: BLE001
+        return f"Unexpected error running wheel strategy: {str(exc)}"
+
+@mcp.tool()
+def get_option_basic(exchange: str = "SSE", fields: str = "ts_code,name,exercise_price,exercise_type,list_date,maturity_date") -> str:
+    """
+    Get option contract reference information (per Tushare doc 157).
+
+    Args:
+        exchange: 'SSE' for 上交所、'SZSE' for 深交所。Empty returns both.
+        fields: Comma-separated columns from opt_basic.
+    """
+    if not pro:
+        return "Error: Tushare token not configured."
+    try:
+        df = pro.opt_basic(exchange=exchange, fields=fields)
+        return df.to_json(orient="records", force_ascii=False)
+    except Exception as e:
+        return f"Error fetching option basic data: {str(e)}"
+
+@mcp.tool()
+def get_option_daily(ts_code: str = "", trade_date: str = "", start_date: str = "", end_date: str = "", exchange: str = "") -> str:
+    """
+    Get option daily bar data (per Tushare doc 157).
+
+    Args:
+        ts_code: Option code like '10002458.SH'. Optional if querying by date+exchange.
+        trade_date: Single trading date (YYYYMMDD).
+        start_date: Start date for range queries (YYYYMMDD).
+        end_date: End date for range queries (YYYYMMDD).
+        exchange: 'SSE' or 'SZSE' when pulling by date.
+    """
+    if not pro:
+        return "Error: Tushare token not configured."
+    try:
+        df = pro.opt_daily(ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date, exchange=exchange)
+        return df.to_json(orient="records", force_ascii=False)
+    except Exception as e:
+        return f"Error fetching option daily data: {str(e)}"
 
 @mcp.tool()
 def scan_market_opportunities(
