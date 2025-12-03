@@ -1,12 +1,13 @@
-"""Reusable wheel strategy backtest logic shared by MCP and web dashboard."""
+"""Reusable wheel strategy backtest logic shared across tools."""
 from __future__ import annotations
 
 import datetime as _dt
-import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+
+from utils.option_math import estimate_implied_vol
 
 
 @dataclass
@@ -19,56 +20,6 @@ class EquityPoint:
 
 class WheelBacktestError(RuntimeError):
     """Raised when the wheel strategy cannot complete."""
-
-
-def _norm_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
-
-
-def _black_scholes_price(
-    spot: float,
-    strike: float,
-    time_years: float,
-    rate: float,
-    sigma: float,
-    option_type: str,
-) -> float:
-    if time_years <= 0 or sigma <= 0 or spot <= 0 or strike <= 0:
-        intrinsic = max(0.0, strike - spot if option_type == "P" else spot - strike)
-        return intrinsic
-    vol_term = sigma * math.sqrt(time_years)
-    d1 = (math.log(spot / strike) + (rate + 0.5 * sigma**2) * time_years) / vol_term
-    d2 = d1 - vol_term
-    if option_type == "P":
-        return strike * math.exp(-rate * time_years) * _norm_cdf(-d2) - spot * _norm_cdf(-d1)
-    return spot * _norm_cdf(d1) - strike * math.exp(-rate * time_years) * _norm_cdf(d2)
-
-
-def _estimate_implied_vol(
-    premium: float,
-    spot: float,
-    strike: float,
-    time_years: float,
-    option_type: str,
-    rate: float = 0.02,
-) -> Optional[float]:
-    if premium <= 0 or time_years <= 0 or spot <= 0 or strike <= 0:
-        return None
-    low, high = 1e-4, 5.0
-    price_low = _black_scholes_price(spot, strike, time_years, rate, low, option_type)
-    price_high = _black_scholes_price(spot, strike, time_years, rate, high, option_type)
-    if premium < price_low or premium > price_high:
-        return None
-    for _ in range(60):
-        mid = 0.5 * (low + high)
-        price_mid = _black_scholes_price(spot, strike, time_years, rate, mid, option_type)
-        if abs(price_mid - premium) < 1e-4:
-            return mid
-        if price_mid > premium:
-            high = mid
-        else:
-            low = mid
-    return 0.5 * (low + high)
 
 
 def _infer_exchange(ts_code: str) -> str:
@@ -266,7 +217,7 @@ def run_wheel_backtest(
                 0,
             )
             time_years = days_to_expiry / 365 if days_to_expiry > 0 else 0.0
-            implied_vol = _estimate_implied_vol(opt_px, spot, strike, time_years, option_type)
+            implied_vol = estimate_implied_vol(opt_px, spot, strike, time_years, option_type)
         premium = opt_px * contract_unit
         state["cash"] += premium
         if option_type == "P":

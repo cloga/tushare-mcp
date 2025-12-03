@@ -1,12 +1,19 @@
 import argparse
 import os
 import json
-import math
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
 import tushare as ts
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from utils.option_math import estimate_implied_vol
 
 load_dotenv()
 TOKEN = os.getenv("TUSHARE_TOKEN")
@@ -48,6 +55,8 @@ START_DATE = args.start_date
 END_DATE = args.end_date or datetime.now().strftime("%Y%m%d")
 OTM_RANGE = (args.otm_min, args.otm_max)
 EXCHANGE = "SSE" if UNDERLYING.endswith(".SH") else "SZSE"
+TEMP_DIR = ROOT_DIR / "temp_data"
+TEMP_DIR.mkdir(exist_ok=True)
 
 trade_cal = pro.trade_cal(exchange=EXCHANGE, start_date=START_DATE, end_date=END_DATE, is_open="1")
 trade_cal = pd.to_datetime(trade_cal["cal_date"])
@@ -55,40 +64,7 @@ trade_days = trade_cal.sort_values().tolist()
 trade_day_set = set(trade_days)
 
 
-def _norm_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
-
-def _black_scholes_price(spot, strike, time_years, rate, sigma, option_type):
-    if time_years <= 0 or sigma <= 0 or spot <= 0 or strike <= 0:
-        intrinsic = max(0.0, strike - spot if option_type == "P" else spot - strike)
-        return intrinsic
-    vol_term = sigma * math.sqrt(time_years)
-    d1 = (math.log(spot / strike) + (rate + 0.5 * sigma**2) * time_years) / vol_term
-    d2 = d1 - vol_term
-    if option_type == "P":
-        return strike * math.exp(-rate * time_years) * _norm_cdf(-d2) - spot * _norm_cdf(-d1)
-    return spot * _norm_cdf(d1) - strike * math.exp(-rate * time_years) * _norm_cdf(d2)
-
-
-def _estimate_implied_vol(premium, spot, strike, time_years, option_type, rate=0.02):
-    if premium <= 0 or time_years <= 0 or spot <= 0 or strike <= 0:
-        return None
-    low, high = 1e-4, 5.0
-    price_low = _black_scholes_price(spot, strike, time_years, rate, low, option_type)
-    price_high = _black_scholes_price(spot, strike, time_years, rate, high, option_type)
-    if premium < price_low or premium > price_high:
-        return None
-    for _ in range(60):
-        mid = 0.5 * (low + high)
-        price_mid = _black_scholes_price(spot, strike, time_years, rate, mid, option_type)
-        if abs(price_mid - premium) < 1e-4:
-            return mid
-        if price_mid > premium:
-            high = mid
-        else:
-            low = mid
-    return 0.5 * (low + high)
 
 def nearest_trade_day(date_str, direction="forward"):
     date = datetime.strptime(date_str, "%Y%m%d")
@@ -229,7 +205,7 @@ for month_start in month_starts:
     if implied_vol is None:
         days_to_expiry = max((datetime.strptime(maturity, "%Y%m%d") - datetime.strptime(trade_date, "%Y%m%d")).days, 0)
         time_years = days_to_expiry / 365 if days_to_expiry > 0 else 0.0
-        implied_vol = _estimate_implied_vol(opt_price, spot, strike, time_years, option_type)
+        implied_vol = estimate_implied_vol(opt_price, spot, strike, time_years, option_type)
     premium = opt_price * contract_unit
     state["cash"] += premium
     if option_type == "P":
@@ -302,7 +278,7 @@ else:
         print(summary.tail(10).to_string(index=False))
 
         # Build HTML report with all trades
-        report_path = Path(__file__).parent / "wheel_report.html"
+        report_path = TEMP_DIR / "wheel_report.html"
         summary_display = summary.copy()
         summary_display["otm_pct"] = (summary_display["otm_pct"] * 100).round(2)
         summary_display["cash_balance"] = summary_display["cash_balance"].round(2)
@@ -384,7 +360,7 @@ else:
         chart_holding = json.dumps(summary_display["holding_value"].tolist())
         chart_portfolio = json.dumps(summary_display["portfolio_value"].tolist())
 
-        dashboard_path = Path(__file__).parent / "wheel_dashboard.html"
+        dashboard_path = TEMP_DIR / "wheel_dashboard.html"
         dashboard_html = f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
 <head>

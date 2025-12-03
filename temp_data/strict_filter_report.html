@@ -1,0 +1,99 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股严选：月线四连阴且未破924高点</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        h1 { color: #333; text-align: center; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #007bff; color: white; cursor: pointer; position: sticky; top: 0; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        .positive { color: #d9534f; font-weight: bold; }
+        .negative { color: #5cb85c; font-weight: bold; }
+        .info { margin-bottom: 20px; color: #666; }
+    </style>
+    <script>
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("stockTable");
+            switching = true;
+            dir = "asc"; 
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    var xContent = x.innerText.toLowerCase();
+                    var yContent = y.innerText.toLowerCase();
+                    var xNum = parseFloat(xContent);
+                    var yNum = parseFloat(yContent);
+                    
+                    if (!isNaN(xNum) && !isNaN(yNum)) {
+                        if (dir == "asc") {
+                            if (xNum > yNum) { shouldSwitch = true; break; }
+                        } else if (dir == "desc") {
+                            if (xNum < yNum) { shouldSwitch = true; break; }
+                        }
+                    } else {
+                        if (dir == "asc") {
+                            if (xContent > yContent) { shouldSwitch = true; break; }
+                        } else if (dir == "desc") {
+                            if (xContent < yContent) { shouldSwitch = true; break; }
+                        }
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;      
+                } else {
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>A股严选结果</h1>
+        <div class="info">
+            <p><strong>筛选条件：</strong></p>
+            <ul>
+                <li>最近四个月月线四连阴</li>
+                <li>均线空头排列</li>
+                <li>20240924以来股价未曾高于当日高点</li>
+            </ul>
+            <p>共找到 <strong>0</strong> 只符合条件的股票。</p>
+        </div>
+        <table id="stockTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">代码</th>
+                    <th onclick="sortTable(1)">名称</th>
+                    <th onclick="sortTable(2)">行业</th>
+                    <th onclick="sortTable(3)">924收盘</th>
+                    <th onclick="sortTable(4)">最新收盘</th>
+                    <th onclick="sortTable(5)">924以来回撤(%)</th>
+                    <th onclick="sortTable(6)">报告期</th>
+                    <th onclick="sortTable(7)">ROE(%)</th>
+                    <th onclick="sortTable(8)">归母净利同比(%)</th>
+                </tr>
+            </thead>
+            <tbody>
+
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

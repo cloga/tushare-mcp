@@ -21,6 +21,13 @@ This is a Model Context Protocol (MCP) server that provides access to Tushare fi
    TUSHARE_TOKEN=your_tushare_token_here
    ```
 
+## Project Layout
+
+- `server/`: MCP entrypoint (`server.py`) plus logs.
+- `src/`: application code split into `strategies/` (wheel backtest, etc.) and `utils/` (shared math + performance helpers).
+- `temp_data/`: generated artifacts such as `wheel_report.html`, `wheel_dashboard.html`, and portfolio CSV/JSON outputs.
+- `tests/`: standalone scripts for strategy prototyping (`wheel_strategy.py`, `portfolio_rebalance.py`, etc.).
+
 ## Using with GitHub Copilot in VS Code
 
 To use this MCP server with GitHub Copilot in VS Code, you need to configure the `mcp.json` file.
@@ -34,7 +41,7 @@ To use this MCP server with GitHub Copilot in VS Code, you need to configure the
   *   Press `Ctrl+Shift+P` again and pick **`MCP: Add MCP Server`**.
   *   When the **Enter Command** prompt appears, paste:
     ```
-    C:\Users\lochen\AppData\Local\Microsoft\WindowsApps\python3.13.exe c:\Users\lochen\tushare-mcp\server.py
+    C:\Users\lochen\AppData\Local\Microsoft\WindowsApps\python3.13.exe c:\Users\lochen\tushare-mcp\server\server.py
     ```
   *   Accept the suggested server name (for example `tushare`) and save.
 
@@ -47,7 +54,7 @@ To use this MCP server with GitHub Copilot in VS Code, you need to configure the
         "tushare-server": {
           "command": "C:\\path\\to\\your\\python.exe",
           "args": [
-            "C:\\path\\to\\tushare_mcp_server\\server.py"
+            "C:\\path\\to\\tushare_mcp_server\\server\\server.py"
           ]
         }
       }
@@ -55,7 +62,7 @@ To use this MCP server with GitHub Copilot in VS Code, you need to configure the
     ```
 
     *   Replace `C:\\path\\to\\your\\python.exe` with your actual Python interpreter path (e.g., `C:\\Users\\username\\AppData\\Local\\Programs\\Python\\Python311\\python.exe`).
-    *   Replace `C:\\path\\to\\tushare_mcp_server\\server.py` with the absolute path to this project's `server.py`.
+    *   Replace `C:\\path\\to\\tushare_mcp_server\\server\\server.py` with the absolute path to this project's server entry point.
 
 3.  **Restart VS Code**:
     After saving `mcp.json`, restart VS Code for the changes to take effect.
@@ -67,7 +74,7 @@ To use this MCP server with GitHub Copilot in VS Code, you need to configure the
 You can test the server using the MCP Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector python server.py
+npx @modelcontextprotocol/inspector python server/server.py
 ```
 
 ### Price Volatility Tool
@@ -134,7 +141,7 @@ Key fields returned:
 
 ### Wheel Strategy Backtest
 
-`wheel_strategy.py` 利用 `159915.SZ`（创业板ETF）及其期权，ETF 行情通过 Tushare `fund_daily` 接口（[文档 #127](https://tushare.pro/document/2?doc_id=127)）获取，模拟“车轮饼”策略：
+`tests/wheel_strategy.py` 利用 `159915.SZ`（创业板ETF）及其期权，ETF 行情通过 Tushare `fund_daily` 接口（[文档 #127](https://tushare.pro/document/2?doc_id=127)）获取，模拟“车轮饼”策略：
 
 1. 每个自然月首个交易日：
   - 若空仓，卖出 5%~10% OTM 的认沽合约（`call_put='P'`）。
@@ -146,29 +153,10 @@ Key fields returned:
 运行：
 
 ```bash
-python wheel_strategy.py
+python tests/wheel_strategy.py
 ```
 
-输出包含总收益、占用保证金、近10期交易记录等。若需调整标的、时间区间或虚值区间，可编辑脚本顶部的常量（`UNDERLYING`、`START_DATE`、`OTM_RANGE` 等）。
-
-### Interactive Web Dashboard
-
-`webui/` 提供了一个 Flask + Bulma/Chart.js 前端，可输入任意 ETF、参数并发起实时回测，同时右侧包含一个小型对话框用于提问：
-
-1.  确保 `.env` 中包含 `TUSHARE_TOKEN`，若需要启用问答助手，再加入 `OPENAI_API_KEY`。
-2.  安装依赖后运行：
-  ```bash
-  cd webui
-  python app.py
-  ```
-3.  打开浏览器访问 `http://127.0.0.1:5000`，即可看到交互式界面，包含：
-  - 参数表单：ETF 代码、起止日期、OTM 区间、初始资金。
-  - 资金曲线（现金 / 持仓 / 组合）。
-  - 可排序的交易明细 DataTable。
-  - 问答窗口：默认无 LLM 时返回提示，如配置 `OPENAI_API_KEY` 则调用 `gpt-5.1-mini`。
-   - 交易表新增“隐含波动率”列，可快速对比权利金与波动水平。
-
-> 注意：Web 端与 MCP 共用 `wheel_backtest.py`，可确保结果一致。
+输出包含总收益、占用保证金、近10期交易记录等。所有生成的 `wheel_report.html`、`wheel_dashboard.html` 等文件都会写入 `temp_data/`，便于统一清理。若需调整标的、时间区间或虚值区间，可编辑脚本顶部的常量（`UNDERLYING`、`START_DATE`、`OTM_RANGE` 等）。
 
 ### Wheel Strategy MCP Tool
 
@@ -181,7 +169,7 @@ python wheel_strategy.py
     "underlying": "159915.SZ",
     "start_date": "20230101",
     "end_date": "20251203",
-    "otm_min": 0.07,
+    "otm_min": 0.05,
     "otm_max": 0.10,
     "initial_capital": 30000
   }
@@ -196,17 +184,17 @@ python wheel_strategy.py
 
 ### Multi-ETF Portfolio Backtest
 
-`portfolio_rebalance.py` 按照截图中的 10 只 ETF 及固定权重构建组合，并在每个自然月首个交易日动态再平衡：
+`tests/portfolio_rebalance.py` 按照截图中的 10 只 ETF 及固定权重构建组合，并在每个自然月首个交易日动态再平衡：
 
 ```bash
-python portfolio_rebalance.py
+python tests/portfolio_rebalance.py
 ```
 
 脚本会：
 - 自动获取所有 ETF 的可用历史区间，并截取重叠部分；
-- 计算每日组合净值并输出 `portfolio_equity_curve.csv`，再平衡明细写入 `portfolio_rebalances.csv`；
-- 生成 `portfolio_vs_benchmarks.csv`，其中包含组合与沪深300/中证500/创业板指的归一化指数曲线；
-- 在 `portfolio_summary.json` 中汇总收益率、年化波动率、最大回撤、Sharpe Ratio 及各基准指数的对比指标。
+- 计算每日组合净值并输出 `temp_data/portfolio_equity_curve.csv`，再平衡明细写入 `temp_data/portfolio_rebalances.csv`；
+- 生成 `temp_data/portfolio_vs_benchmarks.csv`，其中包含组合与沪深300/中证500/创业板指的归一化指数曲线；
+- 在 `temp_data/portfolio_summary.json` 中汇总收益率、年化波动率、最大回撤、Sharpe Ratio 及各基准指数的对比指标。
 
 ### Using with Claude Desktop
 
@@ -217,7 +205,7 @@ Add the following configuration to your `claude_desktop_config.json`:
   "mcpServers": {
     "tushare": {
       "command": "python",
-      "args": ["C:\\Users\\lochen\\tushare_mcp_server\\server.py"],
+      "args": ["C:\\Users\\lochen\\tushare_mcp_server\\server\\server.py"],
       "env": {
         "TUSHARE_TOKEN": "your_token_here"
       }

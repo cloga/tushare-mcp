@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import tushare as ts
@@ -7,10 +8,16 @@ import datetime
 import math
 import json
 from mcp.server.fastmcp import FastMCP
-from wheel_backtest import run_wheel_backtest, WheelBacktestError
 
-# Load environment variables from .env file in the same directory
-env_path = Path(__file__).parent / '.env'
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from strategies.wheel_backtest import run_wheel_backtest, WheelBacktestError
+
+# Load environment variables from repo root
+env_path = ROOT_DIR / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # Debug logging
@@ -758,6 +765,7 @@ def scan_market_opportunities(
         consecutive_monthly_drop: Number of consecutive months with negative returns (close < open). e.g., 3.
         ma_trend: Moving Average trend. 'bear' for MA5 < MA10 < MA20, 'bull' for MA5 > MA10 > MA20.
         price_below_date: Check if current price is lower than the high price on this date (YYYYMMDD).
+                          Strictly checks if the stock price has exceeded the high of this date since then.
     """
     if not pro:
         return "Error: Tushare token not configured."
@@ -767,189 +775,216 @@ def scan_market_opportunities(
         
         # Step 1: Monthly Drop Filter
         if consecutive_monthly_drop > 0:
-            # Get last N months
-            today = datetime.datetime.now()
-            # We need to find the last N month-end dates
-            # Simplified: Get monthly data for last N+1 months to be safe
-            start_date = (today - datetime.timedelta(days=32 * (consecutive_monthly_drop + 1))).strftime('%Y%m%d')
-            end_date = today.strftime('%Y%m%d')
+            # Get last N months of month-end dates
+            # We look back enough days to cover N months
+            cal_start = (datetime.datetime.now() - datetime.timedelta(days=40 * (consecutive_monthly_drop + 2))).strftime('%Y%m%d')
+            cal_end = datetime.datetime.now().strftime('%Y%m%d')
             
-            # Fetch monthly data for all stocks
-            # Note: fetching by date range for all stocks might be heavy, but monthly is okay-ish.
-            # Better: fetch by trade_date for the last N months.
+            # Get monthly calendar to find valid trade_dates for monthly data
+            try:
+                df_cal = pro.trade_cal(exchange='SSE', start_date=cal_start, end_date=cal_end, is_open='1')
+            except Exception as e:
+                return f"Error fetching calendar: {e}"
+
+            df_cal['month'] = df_cal['cal_date'].str[:6]
+            # Get last trading day of each month
+            month_ends = df_cal.groupby('month')['cal_date'].max().sort_values(ascending=False)
             
-            # Get month ends
-            # Fetch more potential months to handle current incomplete month
-            cal = pro.trade_cal(exchange='SSE', is_open='1', start_date=start_date, end_date=end_date)
-            cal['cal_date'] = pd.to_datetime(cal['cal_date'])
-            cal['ym'] = cal['cal_date'].dt.to_period('M')
-            month_ends = cal.groupby('ym')['cal_date'].max().sort_values(ascending=False)
+            # We need the last 'consecutive_monthly_drop' months.
+            target_dates = month_ends.head(consecutive_monthly_drop).tolist()
             
-            # Take top N+3 candidates to be safe
-            candidate_dates = [d.strftime('%Y%m%d') for d in month_ends.head(consecutive_monthly_drop + 3)]
-            print(f"DEBUG: Candidate months: {candidate_dates}")
-            
+            if len(target_dates) < consecutive_monthly_drop:
+                 return f"Error: Not enough monthly data. Found {len(target_dates)} months."
+
+            # Fetch monthly data for these dates
             monthly_dfs = []
-            valid_dates_count = 0
-            
-            for d in candidate_dates:
-                if valid_dates_count >= consecutive_monthly_drop:
-                    break
-                    
+            for d in target_dates:
                 try:
-                    df = pro.monthly(trade_date=d, fields='ts_code,close,open')
-                    if not df.empty:
-                        monthly_dfs.append(df)
-                        valid_dates_count += 1
-                        print(f"DEBUG: Fetched {len(df)} rows for {d}")
-                    else:
-                        print(f"DEBUG: No data for {d}")
+                    # Fetch full market monthly data for this date
+                    df_m = pro.monthly(trade_date=d, fields='ts_code,trade_date,close,open')
+                    monthly_dfs.append(df_m)
                 except Exception as e:
-                    print(f"DEBUG: Error fetching {d}: {e}")
-                    pass
+                    print(f"Error fetching monthly for {d}: {e}")
             
-            if len(monthly_dfs) < consecutive_monthly_drop:
-                return f"Error: Not enough monthly data found. Needed {consecutive_monthly_drop}, found {len(monthly_dfs)}."
-                
+            if not monthly_dfs:
+                return "Error: Failed to fetch monthly data."
+            
             df_monthly = pd.concat(monthly_dfs)
             
-            # Filter: For each stock, must appear in all N months and close < open
-            # Pivot or Group
-            # Let's just count negatives
-            df_monthly['is_negative'] = df_monthly['close'] < df_monthly['open']
+            # Filter for drops
+            df_monthly['is_drop'] = df_monthly['close'] < df_monthly['open']
             
-            # Group by ts_code
-            stats = df_monthly.groupby('ts_code')['is_negative'].agg(['count', 'sum'])
+            # Pivot: index=ts_code, columns=trade_date, values=is_drop
+            pivot = df_monthly.pivot_table(index='ts_code', columns='trade_date', values='is_drop')
             
-            # Debug
-            print(f"DEBUG: Total stocks in monthly data: {len(stats)}")
-            print(f"DEBUG: Target count: {consecutive_monthly_drop}")
+            # We want stocks where all columns are True (drops)
+            # Only consider stocks that have data for ALL target dates
+            if pivot.shape[1] == consecutive_monthly_drop:
+                candidates = pivot[pivot.all(axis=1)].index.tolist()
+            else:
+                # Filter pivot to only include columns in target_dates (in case extra data)
+                valid_cols = [c for c in pivot.columns if c in target_dates]
+                pivot = pivot[valid_cols]
+                # Drop rows with NaN (missing data for some months)
+                pivot = pivot.dropna()
+                candidates = pivot[pivot.all(axis=1)].index.tolist()
             
-            # count should be N (data exists), sum should be N (all negative)
-            # Note: 'sum' of boolean is count of True.
-            valid_stocks = stats[(stats['count'] == consecutive_monthly_drop) & (stats['sum'] == consecutive_monthly_drop)].index.tolist()
-            candidates = valid_stocks
             print(f"DEBUG: Candidates after monthly filter: {len(candidates)}")
-        else:
-            # If no monthly filter, start with all listed stocks? Too many.
-            # We require at least one filter to start.
-            # If only price_below_date is set, we fetch all stocks for that date?
-            pass
-
+        
         if consecutive_monthly_drop > 0 and not candidates:
             return "No stocks found matching monthly drop criteria."
 
-        # Step 2: Price Comparison
+        # Step 2: Price Comparison (Strict: High since Date <= High on Date)
         if price_below_date:
-            # If candidates list is empty (and monthly filter was not used), we need to initialize it
-            # But fetching all stocks is heavy. Let's assume we only run this if candidates exist or we fetch all.
+            if not candidates and consecutive_monthly_drop == 0:
+                 return "Error: Please provide other criteria to narrow down stocks before checking price history."
             
-            # Fetch reference high prices
-            df_ref = pro.daily(trade_date=price_below_date, fields='ts_code,high')
-            if df_ref.empty:
-                # Try next day
-                next_day = (datetime.datetime.strptime(price_below_date, '%Y%m%d') + datetime.timedelta(days=1)).strftime('%Y%m%d')
-                df_ref = pro.daily(trade_date=next_day, fields='ts_code,high')
+            # Get all trading dates since price_below_date
+            try:
+                cal = pro.trade_cal(exchange='SSE', is_open='1', start_date=price_below_date, end_date=datetime.datetime.now().strftime('%Y%m%d'))
+                all_dates = cal['cal_date'].tolist()
+            except:
+                return "Error: Invalid price_below_date or calendar error."
+
+            if not all_dates:
+                return "Error: Invalid price_below_date range."
             
-            df_ref = df_ref.set_index('ts_code')
+            start_d = all_dates[0]
+            end_d = all_dates[-1]
             
-            # Fetch latest prices
-            # Get latest trading date
-            # Robust logic: find the latest date that actually has daily data
-            cal = pro.trade_cal(exchange='SSE', is_open='1', start_date=(datetime.datetime.now() - datetime.timedelta(days=10)).strftime('%Y%m%d'), end_date=datetime.datetime.now().strftime('%Y%m%d'))
-            cal = cal.sort_values('cal_date', ascending=False)
+            final_candidates = []
+            chunk_size = 50
             
-            latest_date = ""
-            df_latest = pd.DataFrame()
-            
-            for d in cal['cal_date'].tolist():
-                try:
-                    df = pro.daily(trade_date=d, fields='ts_code,close')
-                    if not df.empty:
-                        latest_date = d
-                        df_latest = df
-                        print(f"DEBUG: Found latest daily data on {latest_date}")
-                        break
-                except:
-                    pass
-            
-            if df_latest.empty:
-                return "Error: Could not find any recent daily data."
+            for i in range(0, len(candidates), chunk_size):
+                chunk = candidates[i:i+chunk_size]
+                chunk_str = ",".join(chunk)
                 
-            df_latest = df_latest.set_index('ts_code')
+                try:
+                    # Fetch daily data for this chunk for the whole period
+                    df_daily = pro.daily(ts_code=chunk_str, start_date=start_d, end_date=end_d, fields='ts_code,trade_date,high')
+                    
+                    if df_daily.empty:
+                        continue
+                        
+                    # Process each stock in chunk
+                    for code in chunk:
+                        df_stock = df_daily[df_daily['ts_code'] == code]
+                        if df_stock.empty:
+                            continue
+                        
+                        # Check if we have the reference date data
+                        rec_ref = df_stock[df_stock['trade_date'] == start_d]
+                        if rec_ref.empty:
+                            continue
+                            
+                        ref_high = rec_ref.iloc[0]['high']
+                        
+                        # Check subsequent highs
+                        subsequent = df_stock[df_stock['trade_date'] > start_d]
+                        if subsequent.empty:
+                            final_candidates.append(code)
+                            continue
+                            
+                        max_sub_high = subsequent['high'].max()
+                        
+                        if max_sub_high <= ref_high:
+                            final_candidates.append(code)
+                            
+                except Exception as e:
+                    print(f"Error processing chunk {i}: {e}")
             
-            # Filter
-            current_pool = candidates if candidates else df_ref.index.tolist()
-            new_candidates = []
-            
-            for code in current_pool:
-                if code in df_ref.index and code in df_latest.index:
-                    if df_latest.loc[code, 'close'] < df_ref.loc[code, 'high']:
-                        new_candidates.append(code)
-            
-            candidates = new_candidates
+            candidates = final_candidates
 
         if (consecutive_monthly_drop > 0 or price_below_date) and not candidates:
             return "No stocks found matching price criteria."
 
         # Step 3: MA Trend
         if ma_trend:
-            # We need history for candidates
             if not candidates:
                 return "No candidates to check MA trend for."
-                
-            # Fetch last 25 days for candidates
-            # Optimization: Fetch daily data for ALL stocks for last 25 days is better than 1000 calls if candidates > 50
-            # But if candidates is small (<50), loop is better.
-            # Let's assume candidates list is moderate.
             
-            cal = pro.trade_cal(exchange='SSE', is_open='1', start_date=(datetime.datetime.now() - datetime.timedelta(days=60)).strftime('%Y%m%d'), end_date=datetime.datetime.now().strftime('%Y%m%d'))
-            trade_dates = cal.sort_values('cal_date').iloc[-25:]['cal_date'].tolist()
+            # Fetch recent daily data for MA calculation
+            # Need ~30 days for MA20
+            cal_ma = pro.trade_cal(exchange='SSE', is_open='1', start_date=(datetime.datetime.now() - datetime.timedelta(days=60)).strftime('%Y%m%d'), end_date=datetime.datetime.now().strftime('%Y%m%d'))
+            trade_dates = cal_ma.sort_values('cal_date').iloc[-30:]['cal_date'].tolist()
+            start_ma = trade_dates[0]
+            end_ma = trade_dates[-1]
             
             final_candidates = []
+            chunk_size = 50
             
-            # To be safe with API limits, let's fetch by date for the whole market (25 calls) and filter in memory
-            # This is safer than N calls where N could be 1000.
-            
-            daily_data = {}
-            for d in trade_dates:
-                df = pro.daily(trade_date=d, fields='ts_code,close')
-                # Filter for candidates
-                df = df[df['ts_code'].isin(candidates)]
-                daily_data[d] = df
-            
-            for code in candidates:
-                closes = []
-                for d in trade_dates:
-                    if d in daily_data:
-                        row = daily_data[d][daily_data[d]['ts_code'] == code]
-                        if not row.empty:
-                            closes.append(row.iloc[0]['close'])
+            for i in range(0, len(candidates), chunk_size):
+                chunk = candidates[i:i+chunk_size]
+                chunk_str = ",".join(chunk)
                 
-                if len(closes) >= 20:
-                    s = pd.Series(closes)
-                    ma5 = s.rolling(5).mean().iloc[-1]
-                    ma10 = s.rolling(10).mean().iloc[-1]
-                    ma20 = s.rolling(20).mean().iloc[-1]
+                try:
+                    df_ma = pro.daily(ts_code=chunk_str, start_date=start_ma, end_date=end_ma, fields='ts_code,trade_date,close')
                     
-                    if ma_trend == 'bear':
-                        if ma5 < ma10 < ma20:
-                            final_candidates.append(code)
-                    elif ma_trend == 'bull':
-                        if ma5 > ma10 > ma20:
-                            final_candidates.append(code)
+                    for code in chunk:
+                        df_s = df_ma[df_ma['ts_code'] == code].sort_values('trade_date')
+                        if len(df_s) < 20:
+                            continue
+                            
+                        s = df_s['close']
+                        ma5 = s.rolling(5).mean().iloc[-1]
+                        ma10 = s.rolling(10).mean().iloc[-1]
+                        ma20 = s.rolling(20).mean().iloc[-1]
+                        
+                        if ma_trend == 'bear':
+                            if ma5 < ma10 < ma20:
+                                final_candidates.append(code)
+                        elif ma_trend == 'bull':
+                            if ma5 > ma10 > ma20:
+                                final_candidates.append(code)
+                except:
+                    pass
             
             candidates = final_candidates
 
-        # Return results with names
         if not candidates:
             return "No stocks found."
             
-        # Get names
+        # Step 4: Enrich Data (PE, Dividend, Fundamentals)
+        # Basic Info
         df_basic = pro.stock_basic(exchange='', list_status='L', fields='ts_code,name,industry')
         df_basic = df_basic[df_basic['ts_code'].isin(candidates)]
         
-        return df_basic.to_json(orient="records", force_ascii=False)
+        # Daily Basic (PE, PB, Dividend)
+        cal = pro.trade_cal(exchange='SSE', is_open='1', start_date=(datetime.datetime.now() - datetime.timedelta(days=10)).strftime('%Y%m%d'), end_date=datetime.datetime.now().strftime('%Y%m%d'))
+        latest_date = cal.iloc[-1]['cal_date']
+        
+        df_daily_basic = pro.daily_basic(trade_date=latest_date, fields='ts_code,pe,pe_ttm,dv_ratio,turnover_rate,close')
+        
+        # Fundamentals (ROE, Profit Growth)
+        fina_data = []
+        chunk_size = 50
+        for i in range(0, len(candidates), chunk_size):
+            chunk = candidates[i:i+chunk_size]
+            codes_str = ",".join(chunk)
+            try:
+                # Query last available report (using a wide range to catch latest)
+                # Usually 20240930 or 20240630
+                df_fina = pro.fina_indicator(ts_code=codes_str, start_date='20240630', end_date='20251231', fields='ts_code,end_date,roe,profit_yoy')
+                if not df_fina.empty:
+                    # Sort by date desc and take first per stock
+                    df_fina = df_fina.sort_values('end_date', ascending=False).drop_duplicates('ts_code')
+                    fina_data.append(df_fina)
+            except:
+                pass
+        
+        if fina_data:
+            df_fina_all = pd.concat(fina_data)
+        else:
+            df_fina_all = pd.DataFrame(columns=['ts_code', 'roe', 'profit_yoy'])
+
+        # Merge all
+        result = pd.merge(df_basic, df_daily_basic, on='ts_code', how='left')
+        result = pd.merge(result, df_fina_all, on='ts_code', how='left')
+        
+        # Fill NaNs
+        result = result.fillna('-')
+        
+        return result.to_json(orient="records", force_ascii=False)
 
     except Exception as e:
         return f"Error in market scan: {str(e)}"

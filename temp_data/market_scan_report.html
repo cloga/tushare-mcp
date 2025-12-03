@@ -1,0 +1,1005 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股月线四连阴股票筛选</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; cursor: pointer; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        .positive { color: red; }
+        .negative { color: green; }
+    </style>
+    <script>
+        function sortTable(n) {
+            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("stockTable");
+            switching = true;
+            dir = "asc"; 
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("TD")[n];
+                    y = rows[i + 1].getElementsByTagName("TD")[n];
+                    var xContent = x.innerHTML.toLowerCase();
+                    var yContent = y.innerHTML.toLowerCase();
+                    var xNum = parseFloat(xContent);
+                    var yNum = parseFloat(yContent);
+                    
+                    if (!isNaN(xNum) && !isNaN(yNum)) {
+                        if (dir == "asc") {
+                            if (xNum > yNum) { shouldSwitch = true; break; }
+                        } else if (dir == "desc") {
+                            if (xNum < yNum) { shouldSwitch = true; break; }
+                        }
+                    } else {
+                        if (dir == "asc") {
+                            if (xContent > yContent) { shouldSwitch = true; break; }
+                        } else if (dir == "desc") {
+                            if (xContent < yContent) { shouldSwitch = true; break; }
+                        }
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;      
+                } else {
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>A股月线四连阴股票筛选结果</h1>
+    <p>交易日期: 20251103</p>
+    <table id="stockTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">代码</th>
+                <th onclick="sortTable(1)">名称</th>
+                <th onclick="sortTable(2)">行业</th>
+                <th onclick="sortTable(3)">现价</th>
+                <th onclick="sortTable(4)">涨跌幅(%)</th>
+                <th onclick="sortTable(5)">PE(TTM)</th>
+                <th onclick="sortTable(6)">股息率(%)</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td>000403.SZ</td>
+                <td>派林生物</td>
+                <td>生物制药</td>
+                <td>15.66</td>
+                <td class="negative">-0.5083</td>
+                <td>26.5882</td>
+                <td>1.7189</td>
+            </tr>
+    
+            <tr>
+                <td>000503.SZ</td>
+                <td>国新健康</td>
+                <td>软件服务</td>
+                <td>10.08</td>
+                <td class="positive">1.4085</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>000513.SZ</td>
+                <td>丽珠集团</td>
+                <td>化学制药</td>
+                <td>36.65</td>
+                <td class="negative">-0.245</td>
+                <td>15.466</td>
+                <td>3.7617</td>
+            </tr>
+    
+            <tr>
+                <td>000553.SZ</td>
+                <td>安道麦A</td>
+                <td>农药化肥</td>
+                <td>6.58</td>
+                <td class="positive">2.4922</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>000898.SZ</td>
+                <td>鞍钢股份</td>
+                <td>普钢</td>
+                <td>2.71</td>
+                <td class="positive">1.8797</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>001201.SZ</td>
+                <td>东瑞股份</td>
+                <td>农业综合</td>
+                <td>16.0</td>
+                <td class="positive">1.0739</td>
+                <td>180.9457</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002037.SZ</td>
+                <td>保利联合</td>
+                <td>化工原料</td>
+                <td>10.31</td>
+                <td class="positive">0.2918</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002081.SZ</td>
+                <td>金螳螂</td>
+                <td>装修装饰</td>
+                <td>3.39</td>
+                <td class="negative">-0.2941</td>
+                <td>19.6811</td>
+                <td>2.9499</td>
+            </tr>
+    
+            <tr>
+                <td>002086.SZ</td>
+                <td>东方海洋</td>
+                <td>渔业</td>
+                <td>2.6</td>
+                <td class="positive">1.1673</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002096.SZ</td>
+                <td>易普力</td>
+                <td>化工原料</td>
+                <td>14.04</td>
+                <td class="positive">1.5184</td>
+                <td>20.9048</td>
+                <td>1.4601</td>
+            </tr>
+    
+            <tr>
+                <td>002124.SZ</td>
+                <td>天邦食品</td>
+                <td>农业综合</td>
+                <td>2.9</td>
+                <td class="positive">0.6944</td>
+                <td>17.1067</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002221.SZ</td>
+                <td>东华能源</td>
+                <td>石油加工</td>
+                <td>8.27</td>
+                <td class="positive">0.6083</td>
+                <td>33.6007</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002274.SZ</td>
+                <td>华昌化工</td>
+                <td>农药化肥</td>
+                <td>6.34</td>
+                <td class="positive">1.278</td>
+                <td>-</td>
+                <td>4.7319</td>
+            </tr>
+    
+            <tr>
+                <td>002332.SZ</td>
+                <td>仙琚制药</td>
+                <td>化学制药</td>
+                <td>9.59</td>
+                <td class="positive">1.2672</td>
+                <td>34.6623</td>
+                <td>3.1283</td>
+            </tr>
+    
+            <tr>
+                <td>002480.SZ</td>
+                <td>新筑股份</td>
+                <td>运输设备</td>
+                <td>7.08</td>
+                <td class="positive">2.1645</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>002628.SZ</td>
+                <td>成都路桥</td>
+                <td>建筑工程</td>
+                <td>4.53</td>
+                <td class="positive">0.8909</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>300010.SZ</td>
+                <td>豆神教育</td>
+                <td>软件服务</td>
+                <td>7.27</td>
+                <td class="positive">3.267</td>
+                <td>127.2887</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>300040.SZ</td>
+                <td>九洲集团</td>
+                <td>新型电力</td>
+                <td>6.46</td>
+                <td class="positive">1.5723</td>
+                <td>-</td>
+                <td>0.986</td>
+            </tr>
+    
+            <tr>
+                <td>300070.SZ</td>
+                <td>碧水源</td>
+                <td>环境保护</td>
+                <td>4.4</td>
+                <td class="positive">0.9174</td>
+                <td>728.3495</td>
+                <td>0.9773</td>
+            </tr>
+    
+            <tr>
+                <td>300169.SZ</td>
+                <td>天晟新材</td>
+                <td>塑料</td>
+                <td>7.02</td>
+                <td class="negative">-1.2658</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>300284.SZ</td>
+                <td>苏交科</td>
+                <td>建筑工程</td>
+                <td>8.46</td>
+                <td class="positive">0.5945</td>
+                <td>71.1003</td>
+                <td>1.6548</td>
+            </tr>
+    
+            <tr>
+                <td>300344.SZ</td>
+                <td>*ST立方</td>
+                <td>软件服务</td>
+                <td>5.16</td>
+                <td class="positive">20.0</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>300348.SZ</td>
+                <td>长亮科技</td>
+                <td>软件服务</td>
+                <td>14.93</td>
+                <td class="positive">0.9466</td>
+                <td>3771.6285</td>
+                <td>0.0604</td>
+            </tr>
+    
+            <tr>
+                <td>300402.SZ</td>
+                <td>宝色股份</td>
+                <td>专用机械</td>
+                <td>21.85</td>
+                <td class="positive">19.989</td>
+                <td>89.3885</td>
+                <td>0.4518</td>
+            </tr>
+    
+            <tr>
+                <td>300404.SZ</td>
+                <td>博济医药</td>
+                <td>医疗保健</td>
+                <td>10.15</td>
+                <td class="positive">1.2974</td>
+                <td>528.1395</td>
+                <td>0.0969</td>
+            </tr>
+    
+            <tr>
+                <td>300656.SZ</td>
+                <td>民德电子</td>
+                <td>IT设备</td>
+                <td>23.31</td>
+                <td class="positive">0.9965</td>
+                <td>-</td>
+                <td>0.1287</td>
+            </tr>
+    
+            <tr>
+                <td>300687.SZ</td>
+                <td>赛意信息</td>
+                <td>软件服务</td>
+                <td>25.51</td>
+                <td class="positive">1.5121</td>
+                <td>144.0351</td>
+                <td>0.429</td>
+            </tr>
+    
+            <tr>
+                <td>300765.SZ</td>
+                <td>新诺威</td>
+                <td>食品</td>
+                <td>35.18</td>
+                <td class="negative">-0.6215</td>
+                <td>-</td>
+                <td>0.7572</td>
+            </tr>
+    
+            <tr>
+                <td>300865.SZ</td>
+                <td>大宏立</td>
+                <td>专用机械</td>
+                <td>33.02</td>
+                <td class="positive">11.2909</td>
+                <td>-</td>
+                <td>0.1666</td>
+            </tr>
+    
+            <tr>
+                <td>300869.SZ</td>
+                <td>康泰医学</td>
+                <td>医疗保健</td>
+                <td>16.53</td>
+                <td class="positive">0.5474</td>
+                <td>-</td>
+                <td>1.8149</td>
+            </tr>
+    
+            <tr>
+                <td>300894.SZ</td>
+                <td>火星人</td>
+                <td>家用电器</td>
+                <td>12.55</td>
+                <td class="positive">0.1596</td>
+                <td>-</td>
+                <td>4.8156</td>
+            </tr>
+    
+            <tr>
+                <td>301004.SZ</td>
+                <td>嘉益股份</td>
+                <td>家居用品</td>
+                <td>57.11</td>
+                <td class="negative">-0.4705</td>
+                <td>14.5864</td>
+                <td>2.5041</td>
+            </tr>
+    
+            <tr>
+                <td>301024.SZ</td>
+                <td>霍普股份</td>
+                <td>建筑工程</td>
+                <td>41.04</td>
+                <td class="positive">6.1288</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>301030.SZ</td>
+                <td>仕净科技</td>
+                <td>环境保护</td>
+                <td>14.68</td>
+                <td class="positive">1.1716</td>
+                <td>-</td>
+                <td>1.4466</td>
+            </tr>
+    
+            <tr>
+                <td>301063.SZ</td>
+                <td>海锅股份</td>
+                <td>电气设备</td>
+                <td>25.79</td>
+                <td class="positive">2.5855</td>
+                <td>45.2964</td>
+                <td>0.5726</td>
+            </tr>
+    
+            <tr>
+                <td>301078.SZ</td>
+                <td>孩子王</td>
+                <td>其他商业</td>
+                <td>10.86</td>
+                <td class="positive">0.7421</td>
+                <td>52.8689</td>
+                <td>0.5649</td>
+            </tr>
+    
+            <tr>
+                <td>301079.SZ</td>
+                <td>邵阳液压</td>
+                <td>机械基件</td>
+                <td>26.35</td>
+                <td class="positive">1.1905</td>
+                <td>-</td>
+                <td>0.0384</td>
+            </tr>
+    
+            <tr>
+                <td>301090.SZ</td>
+                <td>华润材料</td>
+                <td>化工原料</td>
+                <td>7.64</td>
+                <td class="positive">0.6588</td>
+                <td>-</td>
+                <td>0.5123</td>
+            </tr>
+    
+            <tr>
+                <td>301281.SZ</td>
+                <td>科源制药</td>
+                <td>化学制药</td>
+                <td>32.04</td>
+                <td class="positive">0.6281</td>
+                <td>66.4214</td>
+                <td>0.9363</td>
+            </tr>
+    
+            <tr>
+                <td>301591.SZ</td>
+                <td>肯特股份</td>
+                <td>塑料</td>
+                <td>41.26</td>
+                <td class="positive">1.2764</td>
+                <td>48.2749</td>
+                <td>0.7586</td>
+            </tr>
+    
+            <tr>
+                <td>301592.SZ</td>
+                <td>六九一二</td>
+                <td>软件服务</td>
+                <td>126.44</td>
+                <td class="positive">1.2492</td>
+                <td>140.064</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>301602.SZ</td>
+                <td>超研股份</td>
+                <td>医疗保健</td>
+                <td>24.74</td>
+                <td class="positive">1.1447</td>
+                <td>74.5207</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>600048.SH</td>
+                <td>保利发展</td>
+                <td>全国地产</td>
+                <td>7.3</td>
+                <td class="negative">-0.4093</td>
+                <td>-</td>
+                <td>5.5672</td>
+            </tr>
+    
+            <tr>
+                <td>600073.SH</td>
+                <td>光明肉业</td>
+                <td>食品</td>
+                <td>6.84</td>
+                <td class="positive">0.4405</td>
+                <td>2354.2837</td>
+                <td>1.0673</td>
+            </tr>
+    
+            <tr>
+                <td>600085.SH</td>
+                <td>同仁堂</td>
+                <td>中成药</td>
+                <td>33.7</td>
+                <td class="negative">-0.5606</td>
+                <td>34.1406</td>
+                <td>2.9674</td>
+            </tr>
+    
+            <tr>
+                <td>600117.SH</td>
+                <td>西宁特钢</td>
+                <td>特种钢</td>
+                <td>3.18</td>
+                <td class="positive">1.5974</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>600129.SH</td>
+                <td>太极集团</td>
+                <td>中成药</td>
+                <td>21.01</td>
+                <td class="positive">0.0476</td>
+                <td>-</td>
+                <td>1.4421</td>
+            </tr>
+    
+            <tr>
+                <td>600187.SH</td>
+                <td>国中水务</td>
+                <td>水务</td>
+                <td>2.79</td>
+                <td class="positive">0.3597</td>
+                <td>244.1537</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>600316.SH</td>
+                <td>洪都航空</td>
+                <td>航空</td>
+                <td>34.25</td>
+                <td class="negative">-0.5228</td>
+                <td>665.7756</td>
+                <td>0.0438</td>
+            </tr>
+    
+            <tr>
+                <td>600399.SH</td>
+                <td>抚顺特钢</td>
+                <td>特种钢</td>
+                <td>5.32</td>
+                <td class="positive">1.5267</td>
+                <td>-</td>
+                <td>1.0526</td>
+            </tr>
+    
+            <tr>
+                <td>600422.SH</td>
+                <td>昆药集团</td>
+                <td>中成药</td>
+                <td>13.61</td>
+                <td class="">0.0</td>
+                <td>19.4366</td>
+                <td>1.4698</td>
+            </tr>
+    
+            <tr>
+                <td>600435.SH</td>
+                <td>北方导航</td>
+                <td>专用机械</td>
+                <td>14.17</td>
+                <td class="negative">-1.0475</td>
+                <td>83.2308</td>
+                <td>0.2806</td>
+            </tr>
+    
+            <tr>
+                <td>600529.SH</td>
+                <td>山东药玻</td>
+                <td>医疗保健</td>
+                <td>20.86</td>
+                <td class="negative">-0.1914</td>
+                <td>18.0951</td>
+                <td>3.3557</td>
+            </tr>
+    
+            <tr>
+                <td>600567.SH</td>
+                <td>山鹰国际</td>
+                <td>造纸</td>
+                <td>1.79</td>
+                <td class="positive">1.1299</td>
+                <td>-</td>
+                <td>0.4431</td>
+            </tr>
+    
+            <tr>
+                <td>600606.SH</td>
+                <td>绿地控股</td>
+                <td>全国地产</td>
+                <td>1.78</td>
+                <td class="positive">0.565</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>600727.SH</td>
+                <td>鲁北化工</td>
+                <td>化工原料</td>
+                <td>7.44</td>
+                <td class="positive">0.9498</td>
+                <td>58.488</td>
+                <td>1.3441</td>
+            </tr>
+    
+            <tr>
+                <td>600862.SH</td>
+                <td>中航高科</td>
+                <td>航空</td>
+                <td>22.43</td>
+                <td class="negative">-0.1336</td>
+                <td>29.8436</td>
+                <td>0.9942</td>
+            </tr>
+    
+            <tr>
+                <td>601006.SH</td>
+                <td>大秦铁路</td>
+                <td>铁路</td>
+                <td>5.76</td>
+                <td class="positive">0.5236</td>
+                <td>17.4244</td>
+                <td>8.004</td>
+            </tr>
+    
+            <tr>
+                <td>601668.SH</td>
+                <td>中国建筑</td>
+                <td>建筑工程</td>
+                <td>5.43</td>
+                <td class="">0.0</td>
+                <td>5.0232</td>
+                <td>5.0353</td>
+            </tr>
+    
+            <tr>
+                <td>601800.SH</td>
+                <td>中国交建</td>
+                <td>建筑工程</td>
+                <td>8.77</td>
+                <td class="positive">0.5734</td>
+                <td>6.8779</td>
+                <td>3.3359</td>
+            </tr>
+    
+            <tr>
+                <td>601965.SH</td>
+                <td>中国汽研</td>
+                <td>汽车服务</td>
+                <td>17.44</td>
+                <td class="negative">-0.3998</td>
+                <td>19.3503</td>
+                <td>1.8926</td>
+            </tr>
+    
+            <tr>
+                <td>603039.SH</td>
+                <td>泛微网络</td>
+                <td>软件服务</td>
+                <td>57.51</td>
+                <td class="positive">0.7357</td>
+                <td>69.1522</td>
+                <td>0.3874</td>
+            </tr>
+    
+            <tr>
+                <td>603117.SH</td>
+                <td>万林物流</td>
+                <td>仓储物流</td>
+                <td>5.51</td>
+                <td class="positive">4.5541</td>
+                <td>472.7702</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>603193.SH</td>
+                <td>润本股份</td>
+                <td>日用化工</td>
+                <td>26.57</td>
+                <td class="positive">0.0753</td>
+                <td>35.2085</td>
+                <td>1.3173</td>
+            </tr>
+    
+            <tr>
+                <td>603229.SH</td>
+                <td>奥翔药业</td>
+                <td>化学制药</td>
+                <td>10.26</td>
+                <td class="positive">0.0976</td>
+                <td>46.0884</td>
+                <td>0.8981</td>
+            </tr>
+    
+            <tr>
+                <td>603300.SH</td>
+                <td>海南华铁</td>
+                <td>多元金融</td>
+                <td>7.98</td>
+                <td class="positive">1.9157</td>
+                <td>24.6012</td>
+                <td>0.2696</td>
+            </tr>
+    
+            <tr>
+                <td>603707.SH</td>
+                <td>健友股份</td>
+                <td>生物制药</td>
+                <td>10.05</td>
+                <td class="positive">0.0996</td>
+                <td>24.9868</td>
+                <td>0.995</td>
+            </tr>
+    
+            <tr>
+                <td>603879.SH</td>
+                <td>永悦科技</td>
+                <td>化工原料</td>
+                <td>6.1</td>
+                <td class="negative">-0.4894</td>
+                <td>-</td>
+                <td>0.0</td>
+            </tr>
+    
+            <tr>
+                <td>603896.SH</td>
+                <td>寿仙谷</td>
+                <td>中成药</td>
+                <td>20.26</td>
+                <td class="positive">0.0988</td>
+                <td>30.3387</td>
+                <td>1.925</td>
+            </tr>
+    
+            <tr>
+                <td>688076.SH</td>
+                <td>ST诺泰</td>
+                <td>生物制药</td>
+                <td>39.12</td>
+                <td class="positive">0.6173</td>
+                <td>24.7931</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688091.SH</td>
+                <td>上海谊众</td>
+                <td>化学制药</td>
+                <td>58.19</td>
+                <td class="positive">4.8657</td>
+                <td>523.7809</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688150.SH</td>
+                <td>莱特光电</td>
+                <td>元器件</td>
+                <td>22.99</td>
+                <td class="negative">-5.313</td>
+                <td>42.5527</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688151.SH</td>
+                <td>华强科技</td>
+                <td>医疗保健</td>
+                <td>20.73</td>
+                <td class="positive">0.3874</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688170.SH</td>
+                <td>德龙激光</td>
+                <td>专用机械</td>
+                <td>34.66</td>
+                <td class="positive">2.6963</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688246.SH</td>
+                <td>嘉和美康</td>
+                <td>软件服务</td>
+                <td>26.06</td>
+                <td class="positive">2.076</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688369.SH</td>
+                <td>致远互联</td>
+                <td>软件服务</td>
+                <td>26.46</td>
+                <td class="positive">0.8</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688393.SH</td>
+                <td>安必平</td>
+                <td>医疗保健</td>
+                <td>25.94</td>
+                <td class="positive">1.447</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688570.SH</td>
+                <td>天玛智控</td>
+                <td>专用机械</td>
+                <td>19.68</td>
+                <td class="positive">0.7165</td>
+                <td>61.7079</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>688793.SH</td>
+                <td>倍轻松</td>
+                <td>家用电器</td>
+                <td>29.69</td>
+                <td class="positive">1.0551</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920033.BJ</td>
+                <td>康普化学</td>
+                <td>化工原料</td>
+                <td>19.21</td>
+                <td class="positive">2.0723</td>
+                <td>59.8782</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920061.BJ</td>
+                <td>西磁科技</td>
+                <td>专用机械</td>
+                <td>34.7</td>
+                <td class="negative">-0.9703</td>
+                <td>440.9127</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920098.BJ</td>
+                <td>科隆新材</td>
+                <td>橡胶</td>
+                <td>30.45</td>
+                <td class="positive">0.3626</td>
+                <td>35.5359</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920128.BJ</td>
+                <td>胜业电气</td>
+                <td>元器件</td>
+                <td>30.68</td>
+                <td class="positive">0.4255</td>
+                <td>82.264</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920245.BJ</td>
+                <td>威博液压</td>
+                <td>机械基件</td>
+                <td>30.32</td>
+                <td class="positive">0.1983</td>
+                <td>88.6406</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920414.BJ</td>
+                <td>欧普泰</td>
+                <td>电器仪表</td>
+                <td>14.23</td>
+                <td class="negative">-0.4199</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920427.BJ</td>
+                <td>华维设计</td>
+                <td>建筑工程</td>
+                <td>15.25</td>
+                <td class="positive">0.3289</td>
+                <td>127.3237</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920429.BJ</td>
+                <td>康比特</td>
+                <td>食品</td>
+                <td>17.98</td>
+                <td class="positive">0.5593</td>
+                <td>58.3632</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920475.BJ</td>
+                <td>三友科技</td>
+                <td>专用机械</td>
+                <td>18.9</td>
+                <td class="">0.0</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920489.BJ</td>
+                <td>佳先股份</td>
+                <td>化工原料</td>
+                <td>20.88</td>
+                <td class="positive">0.3846</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920924.BJ</td>
+                <td>广脉科技</td>
+                <td>通信设备</td>
+                <td>24.0</td>
+                <td class="negative">-0.9901</td>
+                <td>138.8156</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920964.BJ</td>
+                <td>润农节水</td>
+                <td>建筑工程</td>
+                <td>7.87</td>
+                <td class="positive">2.7415</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+            <tr>
+                <td>920985.BJ</td>
+                <td>海泰新能</td>
+                <td>电气设备</td>
+                <td>9.41</td>
+                <td class="positive">1.9502</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+    
+        </tbody>
+    </table>
+</body>
+</html>

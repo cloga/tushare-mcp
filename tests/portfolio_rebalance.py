@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
@@ -10,6 +11,13 @@ from typing import Dict, List
 import pandas as pd
 import tushare as ts
 from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from utils.performance import compute_performance_metrics
 
 load_dotenv()
 TOKEN = os.getenv("TUSHARE_TOKEN")
@@ -45,11 +53,12 @@ START_FETCH = "20050101"
 END_FETCH = datetime.now().strftime("%Y%m%d")
 INITIAL_CAPITAL = 100_000.0
 RISK_FREE_RATE = 0.02  # annualized assumption for Sharpe ratio
-OUTPUT_DIR = Path(__file__).parent
-EQUITY_CSV = OUTPUT_DIR / "portfolio_equity_curve.csv"
-REBALANCE_CSV = OUTPUT_DIR / "portfolio_rebalances.csv"
-SUMMARY_JSON = OUTPUT_DIR / "portfolio_summary.json"
-BENCHMARK_CSV = OUTPUT_DIR / "portfolio_vs_benchmarks.csv"
+TEMP_DIR = ROOT_DIR / "temp_data"
+TEMP_DIR.mkdir(exist_ok=True)
+EQUITY_CSV = TEMP_DIR / "portfolio_equity_curve.csv"
+REBALANCE_CSV = TEMP_DIR / "portfolio_rebalances.csv"
+SUMMARY_JSON = TEMP_DIR / "portfolio_summary.json"
+BENCHMARK_CSV = TEMP_DIR / "portfolio_vs_benchmarks.csv"
 
 
 def load_price_series(ts_code: str) -> pd.DataFrame:
@@ -108,36 +117,6 @@ def load_benchmark_series(ts_code: str, start: datetime, end: datetime) -> pd.Se
     return df
 
 
-def compute_metrics(series: pd.Series) -> Dict[str, float | None]:
-    returns = series.pct_change().dropna()
-    if returns.empty:
-        return {
-            "total_return": None,
-            "annualized_return": None,
-            "annualized_vol": None,
-            "sharpe": None,
-            "max_drawdown": None,
-        }
-    total_return = series.iloc[-1] / series.iloc[0] - 1
-    avg_daily = returns.mean()
-    vol_daily = returns.std()
-    annualized_return = (1 + total_return) ** (252 / len(returns)) - 1 if len(returns) > 0 else None
-    annualized_vol = vol_daily * (252**0.5) if not pd.isna(vol_daily) else None
-    sharpe = None
-    if annualized_vol and annualized_vol != 0:
-        sharpe = ((avg_daily * 252) - RISK_FREE_RATE) / annualized_vol
-    cumulative = (1 + returns).cumprod()
-    running_max = cumulative.cummax()
-    drawdown = cumulative / running_max - 1
-    max_drawdown = drawdown.min()
-    return {
-        "total_return": round(total_return * 100, 2),
-        "annualized_return": round(annualized_return * 100, 2) if annualized_return is not None else None,
-        "annualized_vol": round(annualized_vol * 100, 2) if annualized_vol is not None else None,
-        "sharpe": round(sharpe, 2) if sharpe is not None else None,
-        "max_drawdown": round(max_drawdown * 100, 2) if max_drawdown is not None else None,
-    }
-
 
 def run_backtest(prices: pd.DataFrame) -> Dict[str, float]:
     holdings: Dict[str, float] = {code: 0.0 for code, _ in ETF_WEIGHTS}
@@ -190,7 +169,7 @@ def run_backtest(prices: pd.DataFrame) -> Dict[str, float]:
         if series.empty:
             continue
         benchmark_curves[name] = series / series.iloc[0]
-        benchmark_metrics[name] = compute_metrics(series)
+        benchmark_metrics[name] = compute_performance_metrics(series, risk_free_rate=RISK_FREE_RATE)
 
     benchmark_curves.to_csv(BENCHMARK_CSV)
 
@@ -203,7 +182,7 @@ def run_backtest(prices: pd.DataFrame) -> Dict[str, float]:
         "annualized_return": round(annualized * 100, 2) if annualized is not None else None,
         "num_days": elapsed_days,
         "num_rebalances": len(rebalance_records),
-        "portfolio_metrics": compute_metrics(portfolio_series),
+        "portfolio_metrics": compute_performance_metrics(portfolio_series, risk_free_rate=RISK_FREE_RATE),
         "benchmark_metrics": benchmark_metrics,
     }
     SUMMARY_JSON.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
